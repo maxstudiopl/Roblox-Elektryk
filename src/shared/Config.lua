@@ -1,6 +1,7 @@
 -- Elektryk 0.1: a deliberately simplified puzzle, not an installation design.
 local C = {}
-C.Version = "0.1.0"
+C.Version = "0.1.1"
+C.InteractionDistance = 18
 C.Parts = {
  MAIN = {name="Wyłącznik główny", label="GŁÓWNY", width=1, terminals={"L1", "L2"}},
  RCD = {name="RCD 2P", label="RCD", width=2, terminals={"L1", "N1", "L2", "N2"}},

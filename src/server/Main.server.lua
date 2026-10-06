@@ -3,7 +3,7 @@ local ReplicatedStorage=game:GetService('ReplicatedStorage')
 local shared=ReplicatedStorage:WaitForChild('ElectricianShared')
 local Config=require(shared:WaitForChild('Config'))
 local Rules=require(shared:WaitForChild('Rules'))
-local cabinet,prompt=require(script.Parent:WaitForChild('World')).build()
+local cabinet,prompt=require(script.Parent:WaitForChild('World')).build(Config.InteractionDistance)
 local remote=Instance.new('RemoteEvent'); remote.Name='ElectricianEvent'; remote.Parent=ReplicatedStorage
 local sessions={}
 local function setup(player)
@@ -15,7 +15,7 @@ local function setup(player)
 end
 local function nearby(player)
  local root=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
- return root and (root.Position-cabinet.Position).Magnitude<=18
+ return root and (root.Position-cabinet.Position).Magnitude<=Config.InteractionDistance
 end
 local function send(player,message,errors,open)
  local s=sessions[player]; if not s then return end
@@ -38,6 +38,7 @@ remote.OnServerEvent:Connect(function(player,action,data)
  if not s or type(action)~='string' or #action>20 then return end
  local now=os.clock(); s.tokens=math.min(20,s.tokens+(now-s.updated)*10); s.updated=now
  if s.tokens<1 then return end; s.tokens=s.tokens-1
+ if action=='ready' then send(player,'Połączono ze stanowiskiem. Podejdź do stołu i naciśnij E.'); return end
  if action=='close' then s.opened=false; return end
  if action=='open' then
   if nearby(player) then s.opened=true; send(player,'Stanowisko gotowe.',nil,true)

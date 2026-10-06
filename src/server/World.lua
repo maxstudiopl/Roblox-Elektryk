@@ -1,5 +1,5 @@
 local World={}
-function World.build()
+function World.build(interactionDistance)
  local world=Instance.new('Model'); world.Name='ElectricianWorkshop'; world.Parent=workspace
  local function part(name,size,pos,color,material)
   local p=Instance.new('Part'); p.Name=name; p.Size=size; p.Position=pos; p.Anchored=true
@@ -30,7 +30,7 @@ function World.build()
   part('SwitchPreview',Vector3.new(.2,.32,.12),p.Position+Vector3.new(0,0,-.24),{34,45,63})
  end
  local prompt=Instance.new('ProximityPrompt'); prompt.Name='OpenBench'; prompt.ActionText='Buduj rozdzielnicę'
- prompt.ObjectText='Stanowisko elektryka'; prompt.HoldDuration=0; prompt.MaxActivationDistance=12; prompt.RequiresLineOfSight=false; prompt.Parent=cabinet
+ prompt.ObjectText='Stanowisko elektryka'; prompt.HoldDuration=0; prompt.MaxActivationDistance=interactionDistance or 18; prompt.RequiresLineOfSight=false; prompt.KeyboardKeyCode=Enum.KeyCode.E; prompt.ClickablePrompt=true; prompt.Enabled=true; prompt.Parent=cabinet
  for _,x in ipairs({-16,16}) do
   for _,y in ipairs({2,5,8}) do
    part('Shelf',Vector3.new(7,.3,3),Vector3.new(x,y,11),{85,98,117},Enum.Material.Metal)

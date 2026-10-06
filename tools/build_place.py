@@ -43,6 +43,7 @@ def build():
     target = ROOT / 'dist/Elektryk-0.1.rbxlx'
     target.parent.mkdir(exist_ok=True)
     ET.ElementTree(root).write(target, encoding='utf-8', xml_declaration=True)
+    (target.parent / 'Elektryk-0.1.1.rbxlx').write_bytes(target.read_bytes())
     # Round-trip every embedded script, preserving exact source bytes as Unicode.
     parsed = ET.parse(target)
     actual = [n.text for n in parsed.findall('.//ProtectedString')]

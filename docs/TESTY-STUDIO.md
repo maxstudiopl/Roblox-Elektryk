@@ -19,3 +19,12 @@ Status: **do wykonania w Roblox Studio**. Testy automatyczne reguł nie zastępu
 15. Wyjdź i uruchom ponownie: stan wraca do początku (zgodne z zakresem 0.1).
 
 Przed publiczną publikacją wykonaj powyższy test. Gra nie jest automatycznie publikowana na Roblox.
+
+## Regresja otwierania w 0.1.1 (do sprawdzenia w silniku)
+
+- E i przycisk na ekranie otwierają ten sam panel w zasięgu 18 studów.
+- E wpisywane do czatu nie otwiera panelu.
+- Poza zasięgiem E daje komunikat, a serwer nie otwiera panelu.
+- Zielony przycisk oznacza zasięg; odległość zmienia się podczas chodzenia.
+- Po zamknięciu panel otwiera się ponownie; monety nie są resetowane.
+- Wersja widoczna w panelu to 0.1.1.

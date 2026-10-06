@@ -1,6 +1,6 @@
 # Roblox-Elektryk ⚡
 
-**Symulator Elektryka — prototyp 0.1.0 do Roblox Studio.**
+**Symulator Elektryka — prototyp 0.1.1 do Roblox Studio.**
 Warsztat 3D i własna rozdzielnica każdego gracza: montaż aparatów, przewody,
 sprawdzanie układu i wynagrodzenie za trzy kolejne zlecenia.
 
@@ -9,13 +9,24 @@ sprawdzanie układu i wynagrodzenie za trzy kolejne zlecenia.
 1. Na stronie tego repozytorium wybierz **Code → Download ZIP**.
 2. Rozpakuj ZIP na komputerze.
 3. W Roblox Studio wybierz **File → Open from File…** i otwórz
-   **`dist/Elektryk-0.1.rbxlx`**.
+   **`dist/Elektryk-0.1.1.rbxlx`**.
 4. Naciśnij **Play / F5** (nie samo Run). Warsztat powstaje po uruchomieniu gry.
 5. Podejdź do stołu z rozdzielnicą i użyj **E**, dotknij komunikatu stanowiska
    albo kliknij **OTWÓRZ STANOWISKO** będąc przy stole.
 
 **Przed Play pusta scena jest oczekiwana:** pomieszczenie jest generowane przez skrypt serwera.
 Nie musisz włączać HTTP ani API Services. Nie ma zewnętrznych modeli ani płatnych zasobów.
+
+## Poprawka 0.1.1 — otwieranie stanowiska
+
+- Bezpośrednia obsługa E, niezależna od wyświetlenia podpowiedzi nad stołem.
+- Wspólny zasięg 18 studów dla podpowiedzi i kontroli serwera.
+- Zielony przycisk otwierania w zasięgu i licznik odległości.
+- Potwierdzenie połączenia z serwerem i komunikat o braku odpowiedzi.
+
+Po pobraniu aktualizacji otwórz **nowy plik** `dist/Elektryk-0.1.1.rbxlx`.
+Wciśnij Play/F5, kliknij w widok gry, podejdź do stołu i naciśnij E.
+Plik `Elektryk-0.1.rbxlx` również zawiera poprawkę, dla zgodności ze starszym linkiem.
 
 ## Jak grać
 

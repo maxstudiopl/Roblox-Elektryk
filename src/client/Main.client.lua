@@ -36,7 +36,7 @@ end)
 if workspace.CurrentCamera then workspace.CurrentCamera:GetPropertyChangedSignal('ViewportSize'):Connect(resize) end
 resize()
 label(root,'ELEKTRYK',22,14,180,30,25,colors.gold)
-label(root,'WARSZTAT / 0.1',23,46,190,20,12,colors.muted)
+label(root,'WARSZTAT / '..Config.Version,23,46,190,20,12,colors.muted)
 local jobTitle=label(root,'Zlecenie',237,14,600,30,22)
 local balance=label(root,'0 monet',940,17,165,28,19,colors.gold)
 local status=label(root,'WYŁĄCZONE',238,48,630,22,13,colors.green)
@@ -57,8 +57,16 @@ local function close()
  root.Visible=false; selectedTerminal=nil; restoreView(); remote:FireServer('close')
 end
 button(root,'Zamknij',1100,17,80,35,close)
-local hud=button(gui,'OTWÓRZ STANOWISKO',16,16,235,45,function() remote:FireServer('open') end)
-local hudText=label(gui,'Podejdź do rozdzielnicy i naciśnij E. Na telefonie dotknij przycisku przy stanowisku.',16,67,300,66,15)
+local lastOpen=-math.huge
+local function requestOpen()
+ if root.Visible or os.clock()-lastOpen<0.4 then return end
+ lastOpen=os.clock()
+ remote:FireServer('open')
+end
+local hud=button(gui,'OTWÓRZ STANOWISKO [E]',16,16,285,45,requestOpen)
+local hudText=label(gui,'Łączenie ze stanowiskiem…',16,67,350,66,15)
+local distanceText=label(gui,'',16,136,350,40,14,colors.gold)
+local connected=false
 local sidebar=frame(root,16,89,205,593,colors.panel); round(sidebar)
 label(sidebar,'01 / APARATY',14,12,185,24,14,colors.gold)
 local render
@@ -210,9 +218,10 @@ local function openView()
   humanoid.WalkSpeed=0; humanoid.AutoRotate=false; humanoid.JumpPower=0; humanoid.JumpHeight=0
  end
 end
-root:GetPropertyChangedSignal('Visible'):Connect(function() hud.Visible=not root.Visible; hudText.Visible=not root.Visible end)
+root:GetPropertyChangedSignal('Visible'):Connect(function() hud.Visible=not root.Visible; hudText.Visible=not root.Visible; distanceText.Visible=not root.Visible end)
 remote.OnClientEvent:Connect(function(payload)
  if type(payload)~='table' then return end
+ connected=true
  if payload.close then close() end
  if payload.state then
   state=payload.state
@@ -224,7 +233,32 @@ remote.OnClientEvent:Connect(function(payload)
  if payload.message then message.Text=payload.message; hudText.Text=payload.message end
 end)
 UIS.InputBegan:Connect(function(input,processed)
+ -- E has an independent path when Roblox does not display/activate its world prompt.
+ -- Ignore typing, but allow E marked processed by the native ProximityPrompt.
+ if UIS:GetFocusedTextBox() then return end
+ if input.KeyCode==Enum.KeyCode.E and not root.Visible then requestOpen(); return end
  if processed then return end
  if input.KeyCode==Enum.KeyCode.Q and root.Visible then close() end
+end)
+local elapsed=0
+ game:GetService('RunService').Heartbeat:Connect(function(dt)
+ elapsed=elapsed+dt; if elapsed<0.25 then return end; elapsed=0
+ if root.Visible then return end
+ local world=workspace:FindFirstChild('ElectricianWorkshop')
+ local cabinet=world and world:FindFirstChild('Cabinet')
+ local characterRoot=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
+ if not cabinet or not characterRoot then distanceText.Text='Czekam na warsztat i postać…'; return end
+ local distance=(characterRoot.Position-cabinet.Position).Magnitude
+ if distance<=Config.InteractionDistance then
+  distanceText.Text='W zasięgu • naciśnij E lub kliknij OTWÓRZ'
+  hud.BackgroundColor3=Color3.fromRGB(28,127,101)
+ else
+  distanceText.Text=string.format('Podejdź do stołu • %.0f / %d studów',distance,Config.InteractionDistance)
+  hud.BackgroundColor3=colors.line
+ end
+end)
+remote:FireServer('ready')
+task.delay(6,function()
+ if not connected then hudText.Text='Brak odpowiedzi serwera. Sprawdź czerwone błędy w oknie Output.' end
 end)
 player.CharacterRemoving:Connect(function() close() end)
