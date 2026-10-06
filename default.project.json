@@ -1,0 +1,11 @@
+{
+  "name": "Roblox-Elektryk",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {"ElectricianShared": {"$path": "src/shared"}},
+    "ServerScriptService": {"ElectricianServer": {"$path": "src/server"}},
+    "StarterPlayer": {"StarterPlayerScripts": {"ElectricianClient": {"$path": "src/client"}}},
+    "Workspace": {"$properties": {"FilteringEnabled": true}},
+    "Lighting": {"$properties": {"ClockTime": 14, "Brightness": 2}}
+  }
+}

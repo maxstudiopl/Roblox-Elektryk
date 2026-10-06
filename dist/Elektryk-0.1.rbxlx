@@ -1,0 +1,561 @@
+<?xml version='1.0' encoding='utf-8'?>
+<roblox version="4">
+  <External>null</External>
+  <External>nil</External>
+  <Item class="Workspace" referent="RBX00000001">
+    <Properties>
+      <string name="Name">Workspace</string>
+      <bool name="FilteringEnabled">true</bool>
+    </Properties>
+  </Item>
+  <Item class="ReplicatedStorage" referent="RBX00000002">
+    <Properties>
+      <string name="Name">ReplicatedStorage</string>
+    </Properties>
+    <Item class="Folder" referent="RBX00000003">
+      <Properties>
+        <string name="Name">ElectricianShared</string>
+      </Properties>
+      <Item class="ModuleScript" referent="RBX00000004">
+        <Properties>
+          <string name="Name">Config</string>
+          <ProtectedString name="Source">-- Elektryk 0.1: a deliberately simplified puzzle, not an installation design.
+local C = {}
+C.Version = "0.1.0"
+C.Parts = {
+ MAIN = {name="Wyłącznik główny", label="GŁÓWNY", width=1, terminals={"L1", "L2"}},
+ RCD = {name="RCD 2P", label="RCD", width=2, terminals={"L1", "N1", "L2", "N2"}},
+ B10 = {name="Wyłącznik B10", label="B10", width=1, terminals={"L1", "L2"}},
+ B16 = {name="Wyłącznik B16", label="B16", width=1, terminals={"L1", "L2"}},
+}
+C.PartOrder = {"MAIN", "RCD", "B10", "B16"}
+C.Colors = {
+ brown={name="Brązowy", rgb={133,82,47}, kind="L"},
+ black={name="Czarny", rgb={48,53,64}, kind="L"},
+ gray={name="Szary", rgb={159,171,187}, kind="L"},
+ blue={name="Niebieski", rgb={50,151,255}, kind="N"},
+ pe={name="Żółto-zielony", rgb={226,224,66}, kind="PE"},
+}
+C.ColorOrder = {"brown", "black", "gray", "blue", "pe"}
+C.Jobs = {
+ {name="Światło w garażu", reward=150, slots={[1]="MAIN",[2]="RCD",[4]="B10"}, loads={"LIGHT"}, brief="Zamontuj: główny w 1, RCD w 2–3, B10 w 4. Podłącz obwód lampy."},
+ {name="Gniazdo warsztatowe", reward=220, slots={[1]="MAIN",[2]="RCD",[4]="B16"}, loads={"SOCKET"}, brief="Zamontuj: główny w 1, RCD w 2–3, B16 w 4. Podłącz obwód gniazda."},
+ {name="Mały warsztat", reward=350, slots={[1]="MAIN",[2]="RCD",[4]="B10",[5]="B16"}, loads={"LIGHT","SOCKET"}, brief="Zamontuj: główny w 1, RCD w 2–3, B10 w 4 i B16 w 5. Podłącz dwa obwody."},
+}
+C.Names = {['SUP.L']='Zasilanie L',['SUP.N']='Zasilanie N',['SUP.PE']='Zasilanie PE',['BUS.N']='Listwa N',['BUS.PE']='Listwa PE',['LIGHT.L']='Lampa L',['LIGHT.N']='Lampa N',['LIGHT.PE']='Lampa PE',['SOCKET.L']='Gniazdo L',['SOCKET.N']='Gniazdo N',['SOCKET.PE']='Gniazdo PE'}
+function C.endpointName(id)
+ if C.Names[id] then return C.Names[id] end
+ local slot, pin = string.match(id, '^S(%d+)%.(%w+)$')
+ return slot and ('Pole '..slot..' / '..pin) or id
+end
+function C.expected(job)
+ local edges = {{'SUP.L','S1.L1','L'},{'S1.L2','S2.L1','L'},{'SUP.N','S2.N1','N'},{'S2.N2','BUS.N','N'},{'SUP.PE','BUS.PE','PE'}}
+ for i, load in ipairs(job.loads) do
+  local slot = 3+i
+  edges[#edges+1]={'S2.L2','S'..slot..'.L1','L'}
+  edges[#edges+1]={'S'..slot..'.L2',load..'.L','L'}
+  edges[#edges+1]={'BUS.N',load..'.N','N'}
+  edges[#edges+1]={'BUS.PE',load..'.PE','PE'}
+ end
+ return edges
+end
+return C
+</ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX00000005">
+        <Properties>
+          <string name="Name">Rules</string>
+          <ProtectedString name="Source">-- Pure Lua rules: authoritative on the server; exercised outside Studio too.
+local Rules = {}
+function Rules.new()
+ return {job=1, coins=0, completed=0, modules={}, wires={}, powered=false, passed=false}
+end
+local function key(a,b) if a&gt;b then a,b=b,a end return a..'|'..b end
+Rules.key=key
+function Rules.terminals(state, config)
+ local t={['SUP.L']=true,['SUP.N']=true,['SUP.PE']=true,['BUS.N']=true,['BUS.PE']=true}
+ for slot,part in pairs(state.modules) do
+  for _,pin in ipairs(config.Parts[part].terminals) do t['S'..slot..'.'..pin]=true end
+ end
+ for _,load in ipairs(config.Jobs[state.job].loads) do
+  for _,pin in ipairs({'L','N','PE'}) do t[load..'.'..pin]=true end
+ end
+ return t
+end
+function Rules.evaluate(state,config)
+ local job=config.Jobs[state.job]
+ local errors={}
+ for slot,part in pairs(job.slots) do
+  if state.modules[slot]~=part then errors[#errors+1]='Pole '..slot..': wymagany '..config.Parts[part].name end
+ end
+ for slot in pairs(state.modules) do
+  if not job.slots[slot] then errors[#errors+1]='Usuń dodatkowy aparat z pola '..slot end
+ end
+ local expected={}
+ for _,e in ipairs(config.expected(job)) do expected[key(e[1],e[2])]=e end
+ local found={}
+ for _,w in ipairs(state.wires) do
+  local k=key(w.a,w.b)
+  local e=expected[k]
+  if not e then errors[#errors+1]='Nieprawidłowe połączenie: '..config.endpointName(w.a)..' → '..config.endpointName(w.b)
+  elseif config.Colors[w.color].kind~=e[3] then errors[#errors+1]='Zły kolor: '..config.endpointName(w.a)..' → '..config.endpointName(w.b)
+  else found[k]=true end
+ end
+ for _,e in ipairs(config.expected(job)) do
+  if not found[key(e[1],e[2])] then errors[#errors+1]='Brak: '..config.endpointName(e[1])..' → '..config.endpointName(e[2])..' ['..e[3]..']' end
+ end
+ return #errors==0,errors
+end
+function Rules.apply(state,config,action,data)
+ data=type(data)=='table' and data or {}
+ if action=='powerOff' then state.powered=false; return true,'Zasilanie wyłączone. Możesz pracować.' end
+ if action=='next' then
+  if not state.passed then return false,'Najpierw zalicz bieżące zlecenie.' end
+  if state.job&gt;=#config.Jobs then return false,'Wszystkie zlecenia wersji 0.1 ukończone!' end
+  state.job=state.job+1; state.modules={}; state.wires={}; state.powered=false; state.passed=false
+  return true,'Nowe zlecenie przyjęte.'
+ end
+ if action=='test' then
+  if state.passed then return false,'Zapłata za to zlecenie została już przyznana.' end
+  local ok,errors=Rules.evaluate(state,config)
+  state.powered=ok
+  if ok then
+   state.passed=true; state.completed=state.completed+1; state.coins=state.coins+config.Jobs[state.job].reward
+   return true,'Test zaliczony! +'..config.Jobs[state.job].reward..' monet.'
+  end
+  return false,'Test niezaliczony. Zasilanie pozostało wyłączone.',errors
+ end
+ if state.passed then return false,'Zlecenie odebrane. Wybierz następne.' end
+ if state.powered then return false,'Najpierw wyłącz zasilanie.' end
+ if action=='install' then
+  local slot,part=data.slot,data.part
+  if type(slot)~='number' or slot~=slot or slot%1~=0 or slot&lt;1 or slot&gt;12 or type(part)~='string' or not config.Parts[part] then return false,'Nieprawidłowy aparat lub pole.' end
+  local width=config.Parts[part].width
+  if slot+width-1&gt;12 then return false,'Za mało miejsca na szynie.' end
+  for s,p in pairs(state.modules) do
+   if slot&lt;=s+config.Parts[p].width-1 and s&lt;=slot+width-1 then return false,'To miejsce jest zajęte.' end
+  end
+  state.modules[slot]=part
+  return true,'Zamontowano: '..config.Parts[part].name
+ elseif action=='remove' then
+  local slot=data.slot
+  if type(slot)~='number' or not state.modules[slot] then return false,'Wybierz zamontowany aparat.' end
+  state.modules[slot]=nil
+  local prefix='S'..slot..'.'
+  for i=#state.wires,1,-1 do
+   local w=state.wires[i]
+   if w.a:sub(1,#prefix)==prefix or w.b:sub(1,#prefix)==prefix then table.remove(state.wires,i) end
+  end
+  return true,'Aparat i podłączone przewody usunięte.'
+ elseif action=='wire' then
+  local a,b,color=data.a,data.b,data.color
+  if type(a)~='string' or type(b)~='string' or #a&gt;24 or #b&gt;24 or type(color)~='string' or not config.Colors[color] then return false,'Nieprawidłowy przewód.' end
+  local terminals=Rules.terminals(state,config)
+  if a==b or not terminals[a] or not terminals[b] then return false,'Wybierz dwa istniejące, różne zaciski.' end
+  if #state.wires&gt;=32 then return false,'Limit 32 przewodów. Usuń zbędne połączenia.' end
+  for _,w in ipairs(state.wires) do if key(w.a,w.b)==key(a,b) then return false,'Te zaciski są już połączone.' end end
+  state.wires[#state.wires+1]={a=a,b=b,color=color}
+  return true,'Przewód podłączony.'
+ elseif action=='unwire' then
+  local index=data.index
+  if type(index)~='number' or index%1~=0 or not state.wires[index] then return false,'Nie ma takiego przewodu.' end
+  table.remove(state.wires,index); return true,'Przewód usunięty.'
+ elseif action=='reset' then
+  state.modules={}; state.wires={}; return true,'Rozdzielnica wyczyszczona.'
+ end
+ return false,'Nieznana czynność.'
+end
+return Rules
+</ProtectedString>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="ServerScriptService" referent="RBX00000006">
+    <Properties>
+      <string name="Name">ServerScriptService</string>
+    </Properties>
+    <Item class="Folder" referent="RBX00000007">
+      <Properties>
+        <string name="Name">ElectricianServer</string>
+      </Properties>
+      <Item class="ModuleScript" referent="RBX00000008">
+        <Properties>
+          <string name="Name">World</string>
+          <ProtectedString name="Source">local World={}
+function World.build()
+ local world=Instance.new('Model'); world.Name='ElectricianWorkshop'; world.Parent=workspace
+ local function part(name,size,pos,color,material)
+  local p=Instance.new('Part'); p.Name=name; p.Size=size; p.Position=pos; p.Anchored=true
+  p.Color=Color3.fromRGB(color[1],color[2],color[3]); p.Material=material or Enum.Material.SmoothPlastic
+  p.TopSurface=Enum.SurfaceType.Smooth; p.BottomSurface=Enum.SurfaceType.Smooth; p.Parent=world; return p
+ end
+ local function sign(parent,text)
+  local gui=Instance.new('SurfaceGui'); gui.Face=Enum.NormalId.Front; gui.CanvasSize=Vector2.new(1000,250); gui.Parent=parent
+  local label=Instance.new('TextLabel'); label.Size=UDim2.fromScale(1,1); label.BackgroundTransparency=1
+  label.Text=text; label.TextColor3=Color3.fromRGB(239,246,255); label.TextScaled=true; label.Font=Enum.Font.GothamBold; label.Parent=gui
+ end
+ part('Floor',Vector3.new(48,1,40),Vector3.new(0,-.5,0),{48,56,67},Enum.Material.Concrete)
+ part('BackWall',Vector3.new(48,16,1),Vector3.new(0,8,14),{27,35,48})
+ part('LeftWall',Vector3.new(1,16,40),Vector3.new(-24,8,0),{34,43,58})
+ part('RightWall',Vector3.new(1,16,40),Vector3.new(24,8,0),{34,43,58})
+ local banner=part('WorkshopSign',Vector3.new(20,3,.3),Vector3.new(0,11,13.3),{19,26,38})
+ sign(banner,'ELEKTRYK / WARSZTAT 01')
+ part('Accent',Vector3.new(20,.12,.4),Vector3.new(0,9.25,13.1),{246,182,54},Enum.Material.Neon)
+ part('BenchTop',Vector3.new(12,.5,4),Vector3.new(0,3.4,8),{158,112,69},Enum.Material.Wood)
+ for _,x in ipairs({-5,5}) do
+  for _,z in ipairs({6.6,9.4}) do part('BenchLeg',Vector3.new(.4,3.2,.4),Vector3.new(x,1.6,z),{48,55,69},Enum.Material.Metal) end
+ end
+ local cabinet=part('Cabinet',Vector3.new(6,4,.7),Vector3.new(0,5.5,9),{226,232,239},Enum.Material.Metal)
+ part('CabinetInterior',Vector3.new(5.5,3.5,.12),Vector3.new(0,5.5,8.57),{37,46,61})
+ part('DINRail',Vector3.new(5,.15,.2),Vector3.new(0,5.5,8.4),{153,166,183},Enum.Material.Metal)
+ for i=1,12 do
+  local p=part('ModulePreview',Vector3.new(.34,1.2,.35),Vector3.new(-2.2+(i-1)*.4,5.5,8.2),{222,229,239})
+  part('SwitchPreview',Vector3.new(.2,.32,.12),p.Position+Vector3.new(0,0,-.24),{34,45,63})
+ end
+ local prompt=Instance.new('ProximityPrompt'); prompt.Name='OpenBench'; prompt.ActionText='Buduj rozdzielnicę'
+ prompt.ObjectText='Stanowisko elektryka'; prompt.HoldDuration=0; prompt.MaxActivationDistance=12; prompt.RequiresLineOfSight=false; prompt.Parent=cabinet
+ for _,x in ipairs({-16,16}) do
+  for _,y in ipairs({2,5,8}) do
+   part('Shelf',Vector3.new(7,.3,3),Vector3.new(x,y,11),{85,98,117},Enum.Material.Metal)
+   for i=1,3 do
+    local box=part('PartsBox',Vector3.new(1.7,1.2,1.6),Vector3.new(x-2.5+i*1.3,y+.75,11),{175,130,71})
+    sign(box,({'B10','B16','RCD'})[i])
+   end
+  end
+ end
+ for _,x in ipairs({-12,0,12}) do
+  local light=part('WorkLight',Vector3.new(6,.2,1),Vector3.new(x,13,5),{238,246,255},Enum.Material.Neon)
+  local point=Instance.new('PointLight'); point.Brightness=1.5; point.Range=30; point.Parent=light
+ end
+ local spawn=Instance.new('SpawnLocation'); spawn.Name='WorkshopSpawn'; spawn.Size=Vector3.new(6,.2,6); spawn.Position=Vector3.new(0,.1,-7)
+ spawn.CFrame=CFrame.new(0,.1,-7)*CFrame.Angles(0,math.pi,0)
+ spawn.Anchored=true; spawn.Neutral=true; spawn.Duration=0; spawn.Material=Enum.Material.Neon; spawn.Color=Color3.fromRGB(51,170,179); spawn.Parent=world
+ local lighting=game:GetService('Lighting'); lighting.ClockTime=14; lighting.Brightness=2; lighting.Ambient=Color3.fromRGB(130,140,160)
+ workspace.FallenPartsDestroyHeight=-50
+ return cabinet,prompt
+end
+return World
+</ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="Script" referent="RBX00000009">
+        <Properties>
+          <string name="Name">Main</string>
+          <ProtectedString name="Source">local Players=game:GetService('Players')
+local ReplicatedStorage=game:GetService('ReplicatedStorage')
+local shared=ReplicatedStorage:WaitForChild('ElectricianShared')
+local Config=require(shared:WaitForChild('Config'))
+local Rules=require(shared:WaitForChild('Rules'))
+local cabinet,prompt=require(script.Parent:WaitForChild('World')).build()
+local remote=Instance.new('RemoteEvent'); remote.Name='ElectricianEvent'; remote.Parent=ReplicatedStorage
+local sessions={}
+local function setup(player)
+ if sessions[player] then return end
+ sessions[player]={state=Rules.new(),opened=false,tokens=20,updated=os.clock()}
+ local stats=Instance.new('Folder'); stats.Name='leaderstats'; stats.Parent=player
+ local coins=Instance.new('IntValue'); coins.Name='Monety'; coins.Parent=stats
+ local jobs=Instance.new('IntValue'); jobs.Name='Zlecenia'; jobs.Parent=stats
+end
+local function nearby(player)
+ local root=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
+ return root and (root.Position-cabinet.Position).Magnitude&lt;=18
+end
+local function send(player,message,errors,open)
+ local s=sessions[player]; if not s then return end
+ -- String slot keys prevent sparse numeric tables changing shape on the wire.
+ local modules={}; for slot,part in pairs(s.state.modules) do modules[tostring(slot)]=part end
+ remote:FireClient(player,{state={job=s.state.job,coins=s.state.coins,completed=s.state.completed,modules=modules,wires=s.state.wires,powered=s.state.powered,passed=s.state.passed},message=message,errors=errors or {},open=open})
+ local stats=player:FindFirstChild('leaderstats')
+ if stats then stats.Monety.Value=s.state.coins; stats.Zlecenia.Value=s.state.completed end
+end
+Players.PlayerAdded:Connect(setup)
+for _,player in ipairs(Players:GetPlayers()) do setup(player) end
+Players.PlayerRemoving:Connect(function(player) sessions[player]=nil end)
+prompt.Triggered:Connect(function(player)
+ setup(player)
+ if not nearby(player) then return end
+ sessions[player].opened=true; send(player,'Wybierz aparat, a potem wolne pole na szynie.',nil,true)
+end)
+remote.OnServerEvent:Connect(function(player,action,data)
+ local s=sessions[player]
+ if not s or type(action)~='string' or #action&gt;20 then return end
+ local now=os.clock(); s.tokens=math.min(20,s.tokens+(now-s.updated)*10); s.updated=now
+ if s.tokens&lt;1 then return end; s.tokens=s.tokens-1
+ if action=='close' then s.opened=false; return end
+ if action=='open' then
+  if nearby(player) then s.opened=true; send(player,'Stanowisko gotowe.',nil,true)
+  else remote:FireClient(player,{message='Podejdź do stołu z rozdzielnicą.'}) end
+  return
+ end
+ if not s.opened or not nearby(player) then
+  s.opened=false; remote:FireClient(player,{close=true,message='Podejdź ponownie do stanowiska.'}); return
+ end
+ local _,message,errors=Rules.apply(s.state,Config,action,data)
+ send(player,message,errors)
+end)
+</ProtectedString>
+          <bool name="Disabled">false</bool>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="StarterPlayer" referent="RBX00000010">
+    <Properties>
+      <string name="Name">StarterPlayer</string>
+    </Properties>
+    <Item class="StarterPlayerScripts" referent="RBX00000011">
+      <Properties>
+        <string name="Name">StarterPlayerScripts</string>
+      </Properties>
+      <Item class="Folder" referent="RBX00000012">
+        <Properties>
+          <string name="Name">ElectricianClient</string>
+        </Properties>
+        <Item class="LocalScript" referent="RBX00000013">
+          <Properties>
+            <string name="Name">Main</string>
+            <ProtectedString name="Source">local Players=game:GetService('Players')
+local RS=game:GetService('ReplicatedStorage')
+local UIS=game:GetService('UserInputService')
+local player=Players.LocalPlayer
+local Config=require(RS:WaitForChild('ElectricianShared'):WaitForChild('Config'))
+local remote=RS:WaitForChild('ElectricianEvent')
+local colors={bg=Color3.fromRGB(13,20,31),panel=Color3.fromRGB(23,34,49),line=Color3.fromRGB(53,70,90),text=Color3.fromRGB(232,239,249),muted=Color3.fromRGB(150,169,192),gold=Color3.fromRGB(255,189,66),green=Color3.fromRGB(62,207,159)}
+local gui=Instance.new('ScreenGui'); gui.Name='ElectricianUI'; gui.ResetOnSpawn=false; gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling; gui.Parent=player:WaitForChild('PlayerGui')
+local function frame(parent,x,y,w,h,color)
+ local f=Instance.new('Frame'); f.Position=UDim2.fromOffset(x,y); f.Size=UDim2.fromOffset(w,h); f.BackgroundColor3=color or colors.panel; f.BorderSizePixel=0; f.Parent=parent; return f
+end
+local function round(o,n) local c=Instance.new('UICorner'); c.CornerRadius=UDim.new(0,n or 8); c.Parent=o end
+local function label(parent,text,x,y,w,h,size,color)
+ local l=Instance.new('TextLabel'); l.Position=UDim2.fromOffset(x,y); l.Size=UDim2.fromOffset(w,h); l.BackgroundTransparency=1
+ l.Text=text; l.TextColor3=color or colors.text; l.TextSize=size or 16; l.Font=Enum.Font.Gotham; l.TextXAlignment=Enum.TextXAlignment.Left; l.TextWrapped=true; l.Parent=parent; return l
+end
+local function button(parent,text,x,y,w,h,callback,color)
+ local b=Instance.new('TextButton'); b.Position=UDim2.fromOffset(x,y); b.Size=UDim2.fromOffset(w,h); b.BackgroundColor3=color or colors.line; b.BorderSizePixel=0
+ b.Text=text; b.TextColor3=colors.text; b.TextSize=15; b.Font=Enum.Font.GothamBold; b.TextWrapped=true; b.AutoButtonColor=true; b.Parent=parent; round(b,6)
+ b.Activated:Connect(callback); return b
+end
+local function scroll(parent,x,y,w,h)
+ local f=Instance.new('ScrollingFrame'); f.Position=UDim2.fromOffset(x,y); f.Size=UDim2.fromOffset(w,h); f.BackgroundTransparency=1; f.BorderSizePixel=0
+ f.ScrollBarThickness=5; f.ScrollBarImageColor3=colors.muted; f.CanvasSize=UDim2.fromOffset(0,0); f.Parent=parent; return f
+end
+local function clear(f) for _,v in ipairs(f:GetChildren()) do v:Destroy() end end
+local root=frame(gui,0,0,1200,780,colors.bg); root.AnchorPoint=Vector2.new(.5,.5); root.Position=UDim2.fromScale(.5,.5); root.Visible=false; round(root,14)
+local scale=Instance.new('UIScale'); scale.Parent=root
+local function resize()
+ local camera=workspace.CurrentCamera
+ if camera then scale.Scale=math.min((camera.ViewportSize.X-16)/1200,(camera.ViewportSize.Y-60)/780,1.2) end
+end
+workspace:GetPropertyChangedSignal('CurrentCamera'):Connect(function()
+ resize(); if workspace.CurrentCamera then workspace.CurrentCamera:GetPropertyChangedSignal('ViewportSize'):Connect(resize) end
+end)
+if workspace.CurrentCamera then workspace.CurrentCamera:GetPropertyChangedSignal('ViewportSize'):Connect(resize) end
+resize()
+label(root,'ELEKTRYK',22,14,180,30,25,colors.gold)
+label(root,'WARSZTAT / 0.1',23,46,190,20,12,colors.muted)
+local jobTitle=label(root,'Zlecenie',237,14,600,30,22)
+local balance=label(root,'0 monet',940,17,165,28,19,colors.gold)
+local status=label(root,'WYŁĄCZONE',238,48,630,22,13,colors.green)
+local state=nil
+local selectedPart='MAIN'; local selectedColor='brown'; local selectedTerminal=nil; local mode='install'; local tab='wires'
+local errors={}; local pendingReset=false; local previousCamera=nil; local savedMovement=nil
+local function restoreView()
+ local camera=workspace.CurrentCamera
+ if previousCamera and camera then camera.CameraType=previousCamera.kind; camera.CFrame=previousCamera.cf; camera.CameraSubject=previousCamera.subject end
+ previousCamera=nil
+ if savedMovement and savedMovement.humanoid.Parent then
+  savedMovement.humanoid.WalkSpeed=savedMovement.speed; savedMovement.humanoid.AutoRotate=savedMovement.rotate
+  savedMovement.humanoid.JumpPower=savedMovement.jump; savedMovement.humanoid.JumpHeight=savedMovement.height
+ end
+ savedMovement=nil
+end
+local function close()
+ root.Visible=false; selectedTerminal=nil; restoreView(); remote:FireServer('close')
+end
+button(root,'Zamknij',1100,17,80,35,close)
+local hud=button(gui,'OTWÓRZ STANOWISKO',16,16,235,45,function() remote:FireServer('open') end)
+local hudText=label(gui,'Podejdź do rozdzielnicy i naciśnij E. Na telefonie dotknij przycisku przy stanowisku.',16,67,300,66,15)
+local sidebar=frame(root,16,89,205,593,colors.panel); round(sidebar)
+label(sidebar,'01 / APARATY',14,12,185,24,14,colors.gold)
+local render
+local partButtons={}
+for i,part in ipairs(Config.PartOrder) do
+ partButtons[part]=button(sidebar,Config.Parts[part].name,12,42+(i-1)*43,181,36,function()
+  selectedPart=part; mode='install'; selectedTerminal=nil; pendingReset=false; render()
+ end)
+end
+button(sidebar,'Usuń aparat',12,217,181,34,function() mode='remove'; selectedTerminal=nil; render() end)
+label(sidebar,'02 / PRZEWODY',14,268,180,23,14,colors.gold)
+local colorButtons={}
+for i,id in ipairs(Config.ColorOrder) do
+ local rgb=Config.Colors[id].rgb
+ colorButtons[id]=button(sidebar,Config.Colors[id].name,12,299+(i-1)*39,181,32,function()
+  selectedColor=id; mode='wire'; selectedTerminal=nil; render()
+ end,Color3.fromRGB(rgb[1],rgb[2],rgb[3]))
+ if id=='pe' or id=='gray' then colorButtons[id].TextColor3=colors.bg end
+end
+local toolHint=label(sidebar,'',13,504,179,78,14,colors.muted)
+local board=frame(root,235,89,949,411,Color3.fromRGB(32,43,58)); round(board)
+local boardLayer=frame(board,0,0,949,411,Color3.fromRGB(32,43,58)); boardLayer.ClipsDescendants=true; round(boardLayer)
+local brief=label(root,'',236,505,945,40,15,colors.muted)
+local lower=frame(root,235,550,949,132,colors.panel); round(lower)
+local list=scroll(lower,10,35,927,90)
+button(lower,'Połączenia',10,5,140,26,function() tab='wires'; render() end)
+button(lower,'Wynik testu',157,5,140,26,function() tab='errors'; render() end)
+button(lower,'Plan połączeń',304,5,170,26,function() tab='plan'; render() end)
+local message=label(root,'',20,695,740,48,16)
+button(root,'WYCZYŚĆ',20,748,120,25,function()
+ if not pendingReset then pendingReset=true; message.Text='Usunąć aparaty i przewody? Kliknij WYCZYŚĆ ponownie.'; return end
+ pendingReset=false; selectedTerminal=nil; remote:FireServer('reset')
+end)
+label(root,'Uproszczona łamigłówka • postęp tylko w tej sesji',152,749,560,22,12,colors.muted)
+button(root,'WYŁĄCZ',771,699,122,43,function() remote:FireServer('powerOff') end)
+button(root,'TEST',903,699,120,43,function() tab='errors'; remote:FireServer('test') end,Color3.fromRGB(28,127,101))
+local nextButton=button(root,'NASTĘPNE',1033,699,150,43,function() selectedTerminal=nil; pendingReset=false; remote:FireServer('next') end,Color3.fromRGB(153,101,28))
+local function drawSegment(parent,x1,y1,x2,y2,color,width,z)
+ local dx,dy=x2-x1,y2-y1; local length=math.sqrt(dx*dx+dy*dy)
+ if length&lt;.1 then return end
+ local f=frame(parent,(x1+x2)/2,(y1+y2)/2,length,width,color); f.AnchorPoint=Vector2.new(.5,.5); f.Rotation=math.deg(math.atan2(dy,dx)); f.ZIndex=z or 4; round(f,2)
+end
+render=function()
+ if not state then return end
+ local job=Config.Jobs[state.job]
+ jobTitle.Text=string.format('%02d / %s',state.job,job.name)
+ balance.Text=state.coins..' monet'
+ status.Text=state.passed and 'ZALICZONE / WYNAGRODZENIE ODEBRANE' or (state.powered and 'TEST / ZASILANIE WŁĄCZONE' or 'ZASILANIE WYŁĄCZONE / MONTAŻ')
+ brief.Text=job.brief
+ nextButton.Text=state.job==#Config.Jobs and (state.passed and 'UKOŃCZONO!' or 'OSTATNIE') or 'NASTĘPNE'
+ for part,b in pairs(partButtons) do b.BackgroundColor3=(mode=='install' and part==selectedPart) and Color3.fromRGB(143,96,30) or colors.line end
+ for id,b in pairs(colorButtons) do b.Text=(mode=='wire' and id==selectedColor and '● ' or '')..Config.Colors[id].name end
+ toolHint.Text=mode=='remove' and 'Kliknij obudowę aparatu, aby usunąć go wraz z przewodami.' or (mode=='wire' and (selectedTerminal and ('Wybrano '..Config.endpointName(selectedTerminal)..'. Kliknij drugi zacisk.') or 'Kliknij pierwszy zacisk, następnie drugi. Kolor zmieniasz powyżej.') or 'Kliknij wolne pole na szynie. RCD zajmuje dwa pola.')
+ clear(boardLayer)
+ label(boardLayer,'ZASILANIE',20,5,200,20,11,colors.muted)
+ label(boardLayer,'LISTWY',728,5,200,20,11,colors.muted)
+ local rail=frame(boardLayer,26,174,890,15,Color3.fromRGB(135,150,167)); rail.ZIndex=1
+ local positions={}
+ local function terminal(id,x,y,text)
+  positions[id]={x=x,y=y}
+  local b=button(boardLayer,text or id,x-20,y-14,40,28,function()
+   if state.passed then message.Text='Zlecenie ukończone. Wybierz następne.'; return end
+   mode='wire'
+   if selectedTerminal==id then selectedTerminal=nil
+   elseif not selectedTerminal then selectedTerminal=id
+   else local a=selectedTerminal; selectedTerminal=nil; remote:FireServer('wire',{a=a,b=id,color=selectedColor}) end
+   render()
+  end,selectedTerminal==id and Color3.fromRGB(157,109,31) or Color3.fromRGB(16,25,39))
+  b.TextSize=12; b.ZIndex=7
+ end
+ terminal('SUP.L',54,45,'L'); terminal('SUP.N',108,45,'N'); terminal('SUP.PE',162,45,'PE')
+ terminal('BUS.N',775,45,'N'); terminal('BUS.PE',849,45,'PE')
+ local occupied={}
+ for slot,part in pairs(state.modules) do for n=slot,slot+Config.Parts[part].width-1 do occupied[n]=slot end end
+ for slot=1,12 do
+  local x=30+(slot-1)*74
+  label(boardLayer,tostring(slot),x,78,68,20,12,colors.muted)
+  if not occupied[slot] then
+   local b=button(boardLayer,'+',x,112,65,126,function()
+    if mode=='install' then remote:FireServer('install',{slot=slot,part=selectedPart}) else message.Text='Najpierw wybierz aparat z lewej strony.' end
+   end,Color3.fromRGB(42,55,73)); b.ZIndex=2
+  elseif occupied[slot]==slot then
+   local part=state.modules[slot]; local spec=Config.Parts[part]; local w=spec.width*74-9
+   local b=button(boardLayer,'',x,105,w,139,function()
+    if mode=='remove' then selectedTerminal=nil; remote:FireServer('remove',{slot=slot}) else message.Text='Wybierz kolor i kliknij zaciski aparatu.' end
+   end,Color3.fromRGB(211,220,232)); b.ZIndex=2
+   local tag=label(boardLayer,spec.label,x+5,145,w-10,26,15,colors.bg); tag.ZIndex=3; tag.TextXAlignment=Enum.TextXAlignment.Center
+   local toggle=frame(boardLayer,x+w/2-10,182,20,22,state.powered and colors.green or colors.line); toggle.ZIndex=3; round(toggle,3)
+   if part=='RCD' then
+    terminal('S'..slot..'.L1',x+30,122,'L1'); terminal('S'..slot..'.N1',x+w-30,122,'N1')
+    terminal('S'..slot..'.L2',x+30,229,'L2'); terminal('S'..slot..'.N2',x+w-30,229,'N2')
+   else terminal('S'..slot..'.L1',x+w/2,122,'L1'); terminal('S'..slot..'.L2',x+w/2,229,'L2') end
+  end
+ end
+ for i,load in ipairs(job.loads) do
+  local x=180+(i-1)*380
+  label(boardLayer,load=='LIGHT' and 'OBWÓD LAMPY' or 'OBWÓD GNIAZDA',x-45,349,270,24,12,state.powered and colors.green or colors.muted)
+  terminal(load..'.L',x,390,'L'); terminal(load..'.N',x+60,390,'N'); terminal(load..'.PE',x+120,390,'PE')
+ end
+ for i,w in ipairs(state.wires) do
+  local a,b=positions[w.a],positions[w.b]
+  if a and b then
+   local rgb=Config.Colors[w.color].rgb; local color=Color3.fromRGB(rgb[1],rgb[2],rgb[3]); local route=265+(i%6)*12
+   drawSegment(boardLayer,a.x,a.y,a.x,route,color,4)
+   drawSegment(boardLayer,a.x,route,b.x,route,color,4)
+   drawSegment(boardLayer,b.x,route,b.x,b.y,color,4)
+   if w.color=='pe' then
+    drawSegment(boardLayer,a.x,a.y,a.x,route,Color3.fromRGB(30,155,75),1,5)
+    drawSegment(boardLayer,a.x,route,b.x,route,Color3.fromRGB(30,155,75),1,5)
+    drawSegment(boardLayer,b.x,route,b.x,b.y,Color3.fromRGB(30,155,75),1,5)
+   end
+  end
+ end
+ clear(list)
+ local rows={}
+ if tab=='wires' then
+  for i,w in ipairs(state.wires) do
+   rows[#rows+1]=i..'. '..Config.endpointName(w.a)..' → '..Config.endpointName(w.b)..' / '..Config.Colors[w.color].name
+  end
+  if #rows==0 then rows[1]='Wybierz kolor przewodu i połącz dwa zaciski. Plan połączeń jest dostępny powyżej.' end
+ elseif tab=='errors' then
+  if state.passed then rows={'Test zaliczony. Zlecenie odebrane. Nagroda: '..job.reward..' monet.'}
+  elseif #errors==0 then rows={'Naciśnij TEST, aby sprawdzić aparaty, połączenia i kolory przewodów.'}
+  else rows=errors end
+ else
+  for _,e in ipairs(Config.expected(job)) do rows[#rows+1]=Config.endpointName(e[1])..' → '..Config.endpointName(e[2])..' / '..e[3] end
+ end
+ for i,text in ipairs(rows) do
+  label(list,text,4,(i-1)*32,800,30,14,tab=='errors' and not state.passed and colors.gold or colors.text)
+  if tab=='wires' and state.wires[i] and not state.passed then
+   button(list,'Usuń',820,(i-1)*32+2,80,27,function() remote:FireServer('unwire',{index=i}) end)
+  end
+ end
+ list.CanvasSize=UDim2.fromOffset(0,#rows*32)
+end
+local function openView()
+ if root.Visible then return end
+ root.Visible=true; hud.Visible=false; hudText.Visible=false
+ local camera=workspace.CurrentCamera
+ local world=workspace:FindFirstChild('ElectricianWorkshop'); local cabinet=world and world:FindFirstChild('Cabinet')
+ if camera and cabinet then
+  previousCamera={kind=camera.CameraType,cf=camera.CFrame,subject=camera.CameraSubject}
+  camera.CameraType=Enum.CameraType.Scriptable
+  camera.CFrame=CFrame.lookAt(cabinet.Position+Vector3.new(0,1,-9),cabinet.Position)
+ end
+ local humanoid=player.Character and player.Character:FindFirstChildOfClass('Humanoid')
+ if humanoid then
+  savedMovement={humanoid=humanoid,speed=humanoid.WalkSpeed,rotate=humanoid.AutoRotate,jump=humanoid.JumpPower,height=humanoid.JumpHeight}
+  humanoid.WalkSpeed=0; humanoid.AutoRotate=false; humanoid.JumpPower=0; humanoid.JumpHeight=0
+ end
+end
+root:GetPropertyChangedSignal('Visible'):Connect(function() hud.Visible=not root.Visible; hudText.Visible=not root.Visible end)
+remote.OnClientEvent:Connect(function(payload)
+ if type(payload)~='table' then return end
+ if payload.close then close() end
+ if payload.state then
+  state=payload.state
+  local modules={}; for slot,part in pairs(state.modules) do modules[tonumber(slot)]=part end; state.modules=modules
+  errors=payload.errors or {}; pendingReset=false
+  if payload.open then openView() end
+  render()
+ end
+ if payload.message then message.Text=payload.message; hudText.Text=payload.message end
+end)
+UIS.InputBegan:Connect(function(input,processed)
+ if processed then return end
+ if input.KeyCode==Enum.KeyCode.Q and root.Visible then close() end
+end)
+player.CharacterRemoving:Connect(function() close() end)
+</ProtectedString>
+            <bool name="Disabled">false</bool>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="Lighting" referent="RBX00000014">
+    <Properties>
+      <string name="Name">Lighting</string>
+    </Properties>
+  </Item>
+</roblox>
